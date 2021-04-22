@@ -25,7 +25,7 @@ import fearow
 async def main():
     db = await fearow.connect('path/to/pokeapi/db.sqlite3')
     pikachu = await fearow.get_species(25)
-    haunter = await fearow.get_species_named('Haunter')
+    haunter = await fearow.PokeapiModel.PokemonSpecies.get_named('Haunter')
     move = await db.Move.get_named('Perish Song')
     if await (await haunter.pokemon_moves).get(move=move):  # Note the double await!!
         print('{} can learn {}'.format(haunter, move))
