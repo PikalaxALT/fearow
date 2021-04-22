@@ -26,8 +26,6 @@ import operator
 import inspect
 import inflect
 import functools
-import asyncstdlib.functools as afunctools
-import asyncstdlib.builtins as abuiltins
 
 
 __all__ = ('PokeapiModel',)
@@ -68,17 +66,17 @@ def sqlite3_type(coltype: str) -> type:
 
 
 class collection(list[_T]):
-    async def get(self, **attrs) -> typing.Optional[_T]:
+    def get(self, **attrs) -> typing.Optional[_T]:
         iscoro = inspect.isawaitable
-        _all = abuiltins.all
+        _all = all
 
         def attrget(key):
             attrget_sync = operator.attrgetter(key.replace('__', '.'))
 
-            async def inner(item):
+            def inner(item):
                 obj = attrget_sync(item)
                 if iscoro(obj):
-                    obj = await obj
+                    obj = obj
                 return obj
 
             return inner
@@ -88,7 +86,7 @@ class collection(list[_T]):
             pred = attrget(k.replace('__', '.'))
 
             for elem in self:
-                if await pred(elem) == v:
+                if pred(elem) == v:
                     return elem
             return None
 
@@ -98,13 +96,13 @@ class collection(list[_T]):
         ]
 
         for elem in self:
-            if await _all(await pred(elem) == value for pred, value in converted):
+            if _all(pred(elem) == value for pred, value in converted):
                 return elem
         return None
 
 
 def relationship(target: str, local_col: str, foreign_col: str, attrname: str):
-    async def func(instance):
+    def func(instance):
         target_cls: type['PokeapiModel'] = getattr(instance.classes, tblname_to_classname(target))
         fk_id = getattr(instance, local_col)
         result = PokeapiModel.__cache__.get((target_cls, fk_id))
@@ -112,34 +110,34 @@ def relationship(target: str, local_col: str, foreign_col: str, attrname: str):
             statement = 'select * ' \
                         'from "{}" ' \
                         'where {} = ?'.format(target, foreign_col)
-            async with PokeapiModel._connection.execute(
+            with PokeapiModel._connection.execute(
                 statement,
                 (fk_id,)
             ) as cursor:
-                row = await cursor.fetchone()
+                row = cursor.fetchone()
                 if row is not None:
-                    result = await target_cls.from_row(row)
+                    result = target_cls.from_row(row)
         return result
 
     func.__name__ = attrname
-    return afunctools.cached_property(func)
+    return functools.cached_property(func)
 
 
 def backref(target: str, local_col: str, foreign_col: str, attrname: str):
-    async def func(instance):
+    def func(instance):
         target_cls: type['PokeapiModel'] = getattr(instance.classes, tblname_to_classname(target))
         statement = 'select * ' \
                     'from "{}" ' \
                     'where {} = ?'.format(target, foreign_col)
-        async with PokeapiModel._connection.execute(
+        with PokeapiModel._connection.execute(
             statement,
             (getattr(instance, local_col),)
         ) as cursor:
-            result = collection([await target_cls.from_row(row) async for row in cursor if row is not None])
+            result = collection([target_cls.from_row(row) for row in cursor if row is not None])
         return result
 
     func.__name__ = attrname
-    return afunctools.cached_property(func)
+    return functools.cached_property(func)
 
 
 def name_for_scalar_relationship(
@@ -194,10 +192,10 @@ class PokeapiModel:
         return 'pokemon_v2_' + cls.__name__.lower()
 
     @classmethod
-    async def from_row(cls, row: typing.Optional[tuple]) -> typing.Optional['PokeapiModel']:
+    def from_row(cls, row: typing.Optional[tuple]) -> typing.Optional['PokeapiModel']:
         obj = cls.__cache__.get((cls, row[0])) or cls(row)
         try:
-            obj.qualified_name = await obj._qualified_name
+            obj.qualified_name = obj._qualified_name
         except AttributeError:
             pass
         return obj
@@ -215,9 +213,9 @@ class PokeapiModel:
             yield column, getattr(self, column)
 
     @classmethod
-    async def _prepare(cls, connection: asqlite3.Connection):
+    def _prepare(cls, connection: asqlite3.Connection):
         classes: dict[str, type['PokeapiModel']] = {}
-        tbl_names = [x async for x, in await connection.execute(
+        tbl_names = [x for x, in connection.execute(
             "select tbl_name "
             "from sqlite_master "
             "where type = 'table' "
@@ -227,7 +225,7 @@ class PokeapiModel:
             cls_name = tblname_to_classname(tbl_name)
             colspec: dict[str, type] = {
                 colname: sqlite3_type(coltype)
-                async for cid, colname, coltype, notnull, dflt, pk in await connection.execute(
+                for cid, colname, coltype, notnull, dflt, pk in connection.execute(
                         'pragma table_info ("{}")'.format(tbl_name)
                 )
             }
@@ -244,7 +242,7 @@ class PokeapiModel:
         for tbl_name in tbl_names:
             cls_name = tblname_to_classname(tbl_name)
             table_cls = classes[cls_name]
-            foreign_keys = await connection.execute_fetchall(
+            foreign_keys = connection.execute_fetchall(
                 'pragma foreign_key_list ("{}")'.format(tbl_name)
             )
             for id_, seq, dest, local_col, dest_col, on_update, on_delete, match in foreign_keys:
@@ -270,12 +268,12 @@ class PokeapiModel:
         cls.classes = type('Base', (object,), classes)
 
     @classmethod
-    async def prepare(cls, connection: asqlite3.Connection):
+    def prepare(cls, connection: asqlite3.Connection):
         cls._connection = connection
         if not cls.__prepared__:
-            async with _prep_lock:
+            with _prep_lock:
                 if not cls.__prepared__:
-                    await cls._prepare(connection)
+                    cls._prepare(connection)
                     cls.__prepared__ = True
 
         differ = difflib.SequenceMatcher(lambda s: _garbage_pat.match(s) is not None)
@@ -284,53 +282,53 @@ class PokeapiModel:
             differ.set_seqs(a.casefold(), b.casefold())
             return differ.ratio()
 
-        await connection.create_function(
+        connection.create_function(
             'FUZZY_RATIO',
             2,
             fuzzy_ratio
         )
 
     @classmethod
-    async def get(
+    def get(
             cls: type[_T],
             id_: int
     ) -> typing.Optional[_T]:
         if (cls, id_) in cls.__cache__:
             return cls.__cache__.get((cls, id_))
-        async with cls._connection.execute(
+        with cls._connection.execute(
             'select * '
             'from {} '
             'where id = ?'.format(cls.__tablename__),
             (id_,)
         ) as cur:
-            row = await cur.fetchone()
+            row = cur.fetchone()
         if row:
-            return await cls.from_row(row)
+            return cls.from_row(row)
 
     @classmethod
-    async def get_random(
+    def get_random(
             cls: type[_T]
     ) -> _T:
-        async with cls._connection.execute(
+        with cls._connection.execute(
             'select * '
             'from {} '
             'order by random()'.format(cls.__tablename__)
         ) as cur:
-            return await cls.from_row(await cur.fetchone())
+            return cls.from_row(cur.fetchone())
 
-    @afunctools.cached_property
-    async def _qualified_name(self):
+    @functools.cached_property
+    def _qualified_name(self):
         if self.__class__.__name__ == 'Language':
             attrs = {'local_language_id': 9}
             collection_name = 'language_names__language'
         else:
             attrs = {'language_id': 9}
             collection_name = re.sub(r'([a-z])([A-Z])', r'\1_\2', self.__class__.__name__).lower() + '_names'
-        names = await getattr(self, collection_name)
-        return (await names.get(**attrs)).name
+        names = getattr(self, collection_name)
+        return (names.get(**attrs)).name
 
     @classmethod
-    async def get_named(
+    def get_named(
             cls: type[_T],
             name: str,
             *,
@@ -345,10 +343,10 @@ class PokeapiModel:
         lang_attr_name = 'local_language_id' if cls.__name__ == 'Language' else 'language_id'
         lang_clause = '{1}.{3} = 9'
         statement = f'{select} WHERE {lang_clause} AND ({fuzzy_clause})'.format(cls.__tablename__, name_cls.__tablename__, fk_name, lang_attr_name)
-        async with cls._connection.execute(statement, dict(name=name, cutoff=cutoff)) as cur:
-            row = await cur.fetchone()
+        with cls._connection.execute(statement, dict(name=name, cutoff=cutoff)) as cur:
+            row = cur.fetchone()
         if row:
-            return await cls.from_row(row)
+            return cls.from_row(row)
 
     def __str__(self):
         try:
