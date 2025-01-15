@@ -15,17 +15,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sqlite3
+from collections.abc import AsyncIterator, Callable, Iterable
+from types import TracebackType
 from typing import TYPE_CHECKING, Any, Optional
-from collections.abc import Callable, AsyncIterator, Iterable
 
 from .types import *
-from types import TracebackType
+
 if TYPE_CHECKING:
     from .core import Connection
 
 
 class Cursor:
-    def __init__(self, connection: 'Connection', cursor: sqlite3.Cursor):
+    def __init__(self, connection: "Connection", cursor: sqlite3.Cursor):
         self._connection = connection
         self._cursor = cursor
 
@@ -89,5 +90,10 @@ class Cursor:
     async def __aenter__(self):
         return self
 
-    async def __aexit__(self, exc_type: type[BaseException], exc_val: BaseException, exc_tb: TracebackType):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException],
+        exc_val: BaseException,
+        exc_tb: TracebackType,
+    ):
         await self.close()

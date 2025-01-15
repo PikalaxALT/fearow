@@ -14,23 +14,23 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sqlite3
 import asyncio
 import concurrent.futures as cf
-from .cursor import Cursor
-from typing import Any, Union, Optional
-from collections.abc import Callable, Iterable, Generator, AsyncIterator
 import functools
 import logging
+import sqlite3
+from collections.abc import AsyncIterator, Callable, Generator, Iterable
 from os import PathLike
-from .context import contextmanager
 from types import TracebackType
+from typing import Any, Optional, Union
+
+from .context import contextmanager
+from .cursor import Cursor
 from .types import *
 
+__all__ = ("Cursor", "Connection", "connect")
 
-__all__ = ('Cursor', 'Connection', 'connect')
-
-LOG = logging.getLogger('asqlite3')
+LOG = logging.getLogger("asqlite3")
 LOG.setLevel(logging.DEBUG)
 
 
@@ -45,7 +45,7 @@ class Connection:
     @property
     def _conn(self):
         if self._connection is None:
-            raise ValueError('No active connection')
+            raise ValueError("No active connection")
 
         return self._connection
 
@@ -57,7 +57,7 @@ class Connection:
 
     def _execute_insert(self, sql: str, parameters: Iterable):
         cursor = self._conn.execute(sql, parameters)
-        cursor.execute('SELECT last_insert_rowid()')
+        cursor.execute("SELECT last_insert_rowid()")
         return cursor.fetchone()
 
     def _execute_fetchall(self, sql: str, parameters: Iterable):
@@ -67,20 +67,27 @@ class Connection:
     async def _connect(self):
         if self._connection is None:
             try:
-                self._connection = await self._execute(sqlite3.connect, self._db_path, **self._init_kwargs)
+                self._connection = await self._execute(
+                    sqlite3.connect, self._db_path, **self._init_kwargs
+                )
             except Exception:
                 self._connection = None
                 raise
 
         return self
 
-    def __await__(self) -> Generator[Any, None, 'Connection']:
+    def __await__(self) -> Generator[Any, None, "Connection"]:
         return self._connect().__await__()
 
-    async def __aenter__(self) -> 'Connection':
+    async def __aenter__(self) -> "Connection":
         return await self
 
-    async def __aexit__(self, exc_type: type[BaseException], exc_val: BaseException, exc_tb: TracebackType):
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException],
+        exc_val: BaseException,
+        exc_tb: TracebackType,
+    ):
         await self.close()
 
     @contextmanager
@@ -97,7 +104,7 @@ class Connection:
         try:
             await self._execute(self._conn.close)
         except Exception:
-            LOG.info('exception occurred while closing the connection')
+            LOG.info("exception occurred while closing the connection")
         finally:
             self._connection = None
 
@@ -120,8 +127,12 @@ class Connection:
         return await self._execute(self._execute_fetchall, sql, parameters)
 
     @contextmanager
-    async def executemany(self, sql: str, parameters: Iterable[Iterable] = None) -> Cursor:
-        return Cursor(self, await self._execute(self._conn.executemany, sql, parameters))
+    async def executemany(
+        self, sql: str, parameters: Iterable[Iterable] = None
+    ) -> Cursor:
+        return Cursor(
+            self, await self._execute(self._conn.executemany, sql, parameters)
+        )
 
     @contextmanager
     async def executescript(self, script: str) -> Cursor:
@@ -130,11 +141,21 @@ class Connection:
     async def interrupt(self):
         return self._conn.interrupt()
 
-    async def create_function(self, name: str, num_params: int, callback: Callable, *, deterministic=False):
-        return await self._execute(self._conn.create_function, name, num_params, callback, deterministic=deterministic)
+    async def create_function(
+        self, name: str, num_params: int, callback: Callable, *, deterministic=False
+    ):
+        return await self._execute(
+            self._conn.create_function,
+            name,
+            num_params,
+            callback,
+            deterministic=deterministic,
+        )
 
     async def create_aggregate(self, name: str, num_params: int, aggregate_class: type):
-        return await self._execute(self._conn.create_aggregate, name, num_params, aggregate_class)
+        return await self._execute(
+            self._conn.create_aggregate, name, num_params, aggregate_class
+        )
 
     async def create_collation(self, name: str, callback: Optional[Callable]):
         return await self._execute(self._conn.create_collation, name, callback)
@@ -177,9 +198,7 @@ class Connection:
     async def load_extension(self, path: str):
         await self._execute(self._conn.load_extension, path)  # type: ignore
 
-    async def set_progress_handler(
-        self, handler: Callable[[], Optional[int]], n: int
-    ):
+    async def set_progress_handler(self, handler: Callable[[], Optional[int]], n: int):
         await self._execute(self._conn.set_progress_handler, handler, n)
 
     async def set_trace_callback(self, handler: Callable):
@@ -196,17 +215,24 @@ class Connection:
                 yield line
 
     async def backup(
-            self,
-            target: Union['Connection', sqlite3.Connection],
-            *,
-            pages=0,
-            progress: Callable[[int, int, int], None] = None,
-            name='main',
-            sleep=0.250
+        self,
+        target: Union["Connection", sqlite3.Connection],
+        *,
+        pages=0,
+        progress: Callable[[int, int, int], None] = None,
+        name="main",
+        sleep=0.250,
     ):
         if isinstance(target, Connection):
             target = target._conn
-        await self._execute(self._conn.backup, target, pages=pages, progress=progress, name=name, sleep=sleep)
+        await self._execute(
+            self._conn.backup,
+            target,
+            pages=pages,
+            progress=progress,
+            name=name,
+            sleep=sleep,
+        )
 
 
 def connect(database: Union[str, PathLike], **kwargs):

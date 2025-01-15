@@ -14,19 +14,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import TypeVar, Any
-from collections.abc import Callable, Generator, Coroutine
-from typing_extensions import AsyncContextManager
+from collections.abc import Callable, Coroutine, Generator
 from functools import wraps
+from typing import Any, TypeVar
+
+from typing_extensions import AsyncContextManager
+
 from .cursor import Cursor
 
-_T = TypeVar('_T')
+_T = TypeVar("_T")
 
-__all__ = ('contextmanager',)
+__all__ = ("contextmanager",)
 
 
 class Result(AsyncContextManager[_T], Coroutine[Any, Any, _T]):
-    __slots__ = ('_coro', '_obj')
+    __slots__ = ("_coro", "_obj")
 
     def __init__(self, coro: Coroutine[Any, Any, _T]):
         self._coro = coro
@@ -60,7 +62,7 @@ class Result(AsyncContextManager[_T], Coroutine[Any, Any, _T]):
 
 
 def contextmanager(
-        method: Callable[..., Coroutine[Any, Any, _T]]
+    method: Callable[..., Coroutine[Any, Any, _T]]
 ) -> Callable[..., Result[_T]]:
     @wraps(method)
     def wrapper(self, *args, **kwargs) -> Result[_T]:

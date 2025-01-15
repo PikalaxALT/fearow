@@ -15,7 +15,7 @@ The ORM is centered around the `PokeapiModel` class, which is a specialized repl
 4. `.qualified_name` is a special case. If an object has rows in a table of names, this attribute will be the English name from that table referencing the given row, else `None`.
 
 ## Requirements
-Python 3.6 or newer with all the packages listed in requirements.txt. You should also clone [PokeAPI](/PokeAPI/pokeapi) recursively and follow its instructions to build the local SQLite database.
+Python 3.6 or newer with all the packages listed in requirements.txt. You should also run `scripts/build.py` to construct the sqlite3 database.
 
 ## Usage in scripts
 ```py
@@ -23,7 +23,7 @@ import asyncio
 import fearow
 
 async def main():
-    db = await fearow.connect('path/to/pokeapi/db.sqlite3')
+    db = await fearow.connect()
     pikachu = await fearow.get_species(25)
     haunter = await fearow.PokeapiModel.PokemonSpecies.get_named('Haunter')
     move = await db.Move.get_named('Perish Song')
